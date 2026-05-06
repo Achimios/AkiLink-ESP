@@ -15,8 +15,7 @@ AkiLink-ESP | Multi-mode Transparent Transmission Module for ESP Chips. Supports
 ### 引脚设置请看src中的 data_config.h
 #### ESP32默认引脚：
 ##### 电路板图
-![电路板图2](__attach/ESP32_1.png)
-![电路板图2](__attach/ESP32_2.png)
+<img src="__attach/ESP32_1.png" width="50%"><img src="__attach/ESP32_2.png" width="50%">
 
 #####
 io 13 —— 默认上拉，开关按钮接GND，开机时检测，拉低进入网页调参模式，运行中改变状态会自动重启
@@ -33,8 +32,7 @@ io 33 ——  额外指示灯，TCP 模式下是否连接客户端
 
 #### ESP32 C3默认引脚：
 ##### 电路板图
-![图1](__attach/ESP32_C3_1.png)
-![图2](__attach/ESP32_C3_2.png)
+<img src="__attach/ESP32_C3_1.png" width="50%"><img src="__attach/ESP32_C3_2.png" width="50%">
 #####
 
 io 3 ——  默认上拉，开关按钮接GND，开机时检测，拉低进入网页调参模式，运行中改变状态会自动重启
@@ -50,8 +48,7 @@ io 10 ——  额外指示灯，TCP 模式下是否连接客户端
 
 #### ESP 8266/8285
 ##### 电路板图
-![图1](__attach/ESP8285_1.png)
-![图2](__attach/ESP8285_2.png)
+<img src="__attach/ESP8285_1.png" width="50%"><img src="__attach/ESP8285_2.png" width="50%">
 #####
 
 io 0 —— 默认上拉，点动按钮接GND，
@@ -69,6 +66,9 @@ io2 —— 板载指示灯，连接状态
 WIFI热点连接后，浏览器打开 10.0.0.1，调节参数，剩余说明全在html里这儿就不多说啦🤪
 设置为STA模式后，由于有家庭无线路由器中介，信号好的多。你得重启ESP，再次进入网页调参，记下右上角的动态分配的STA IP，以与上位机或其他ESP进行连接。
 ![网页图](__attach/web_screenshot_1.png)
+
+
+
 
 
 
