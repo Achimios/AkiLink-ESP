@@ -1,0 +1,278 @@
+# mLRS 移植到 BetaFPV Nano 2.4G RX — 配置对比与修改
+
+> mLRS 版本: main branch (pre-release, target 对应 v1.3.08)
+> 目标: 把 mLRS 固件刷到 BetaFPV Nano 2.4G RX (ESP8285 + SX1281 + PA/LNA)
+
+---
+
+## 0. 架构说明
+
+mLRS 的 ESP target 由两部分定义:
+
+1. **`platformio.ini`** — 定义 PIO env、编译选项、`-D` 宏 (选择 HAL)
+2. **`mLRS/Common/hal/esp/rx-hal-xxx.h`** — HAL 头文件, 定义全部硬件 pin 和功率配置
+
+只需要: 新增一个 `.h` + `platformio.ini` 里加一个 `[env]`
+
+---
+
+## 1. mLRS 默认 Generic 2400 PA HAL (最接近的现有 target)
+
+> 文件: `mLRS/Common/hal/esp/rx-hal-generic-2400-pa-esp8285.h`
+> 对应 env: `rx-generic-2400-pa`
+> 对应宏: `RX_ELRS_GENERIC_2400_PA_ESP8285`
+
+```c
+//*******************************************************
+// hal — ESP8285, ELRS GENERIC 2400 PA RX
+//*******************************************************
+
+#define DEVICE_HAS_SINGLE_LED
+#define DEVICE_HAS_NO_DEBUG
+
+//-- UARTS
+#define UARTB_USE_SERIAL
+#define UARTB_BAUD                RX_SERIAL_BAUDRATE
+#define UARTB_TXBUFSIZE           RX_SERIAL_TXBUFSIZE
+#define UARTB_RXBUFSIZE           RX_SERIAL_RXBUFSIZE
+
+#define UARTF_USE_SERIAL
+#define UARTF_BAUD                115200
+
+//-- SX1: SX12xx & SPI
+#define SPI_CS_IO                 IO_P15      // GPIO15 = NSS
+#define SPI_FREQUENCY             16000000L   // 16 MHz SPI
+#define SX_RESET                  IO_P2       // GPIO2
+#define SX_BUSY                   IO_P5       // GPIO5
+#define SX_DIO1                   IO_P4       // GPIO4
+#define SX_TX_EN                  IO_P10      // GPIO10 = PA 使能
+#define SX_RX_EN                  IO_P9       // GPIO9  = LNA 使能
+
+// GPIO init
+void sx_init_gpio(void)
+{
+    gpio_init(SX_DIO1, IO_MODE_INPUT_ANALOG);
+    gpio_init(SX_BUSY, IO_MODE_INPUT_PU);
+    gpio_init(SX_TX_EN, IO_MODE_OUTPUT_PP_LOW);
+    gpio_init(SX_RX_EN, IO_MODE_OUTPUT_PP_LOW);
+    gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_HIGH);
+}
+
+// PA/LNA 切换
+IRAM_ATTR void sx_amp_transmit(void)
+{
+    gpio_low(SX_RX_EN);
+    gpio_high(SX_TX_EN);
+}
+
+IRAM_ATTR void sx_amp_receive(void)
+{
+    gpio_low(SX_TX_EN);
+    gpio_high(SX_RX_EN);
+}
+
+// 中断
+void sx_dio_enable_exti_isr(void)
+{
+    attachInterrupt(SX_DIO1, SX_DIO_EXTI_IRQHandler, RISING);
+}
+
+//-- Button
+#define BUTTON                    IO_P0       // GPIO0
+
+//-- LEDs
+#define LED_RED                   IO_P16      // GPIO16
+
+//-- POWER
+#define POWER_GAIN_DBM            18          // PA 增益 18 dB
+#define POWER_SX1280_MAX          SX1280_POWER_3_DBM  // SX1280 最大输出 3 dBm
+#define POWER_USE_DEFAULT_RFPOWER_CALC
+
+#define RFPOWER_DEFAULT           1           // 默认功率等级 index
+
+const rfpower_t rfpower_list[] = {
+    { .dbm = POWER_MIN, .mW = INT8_MIN },
+    { .dbm = POWER_10_DBM, .mW = 10 },
+    { .dbm = POWER_17_DBM, .mW = 50 },
+    { .dbm = POWER_20_DBM, .mW = 100 },
+};
+```
+
+---
+
+## 2. mLRS platformio.ini 中的对应 env
+
+```ini
+;-- 公共 ESP8285 配置 --
+[env_common_esp82xx]
+platform = espressif8266@4.2.1
+board_build.f_cpu = 160000000L        ; ← 160 MHz! (ELRS 默认 80 MHz)
+build_type = release
+build_flags = -Os
+
+;-- RX 公共源文件 --
+[env_common_rx_esp82xx]
+extends = env_common_esp82xx
+build_src_filter = ${env_common_rx.build_src_filter}
+
+;-- Generic 2400 PA 接收机 --
+[env:rx-generic-2400-pa]
+extends = env_common_rx_esp82xx
+board = esp8285
+build_src_filter =
+  ${env_common_rx_esp82xx.build_src_filter}
+  +<modules/sx12xx-lib/src/sx128x.cpp>
+build_flags =
+  ${env_common_rx_esp82xx.build_flags}
+  -D RX_ELRS_GENERIC_2400_PA_ESP8285
+```
+
+---
+
+## 3. ⭐ BetaFPV Nano 需要改什么? → 几乎不用改!
+
+### Pin 对比 (ELRS Generic 2400 PA vs mLRS Generic 2400 PA)
+
+| 功能 | ELRS (Generic 2400 PA.json) | mLRS (rx-hal-generic-2400-pa-esp8285.h) | 一致? |
+|------|:--:|:--:|:--:|
+| UART RX | GPIO 3 | Serial (默认3) | ✅ |
+| UART TX | GPIO 1 | Serial (默认1) | ✅ |
+| SPI NSS | GPIO 15 | IO_P15 | ✅ |
+| SPI SCK | GPIO 14 | (SPI 默认) | ✅ |
+| SPI MOSI | GPIO 13 | (SPI 默认) | ✅ |
+| SPI MISO | GPIO 12 | (SPI 默认) | ✅ |
+| SX RESET | GPIO 2 | IO_P2 | ✅ |
+| SX BUSY | GPIO 5 | IO_P5 | ✅ |
+| SX DIO1 | GPIO 4 | IO_P4 | ✅ |
+| PA TX_EN | GPIO 10 | IO_P10 | ✅ |
+| LNA RX_EN | GPIO 9 | IO_P9 | ✅ |
+| LED | GPIO 16 | IO_P16 | ✅ |
+| Button | GPIO 0 | IO_P0 | ✅ |
+
+**结论: pin 完全一致! BetaFPV Nano 直接用 `rx-generic-2400-pa` 就行!**
+
+### 唯一可能需要调的: DC-DC 模式
+
+ELRS 的 overlay 里有 `"radio_dcdc": true`，表示 SX1280 应使用 DC-DC 稳压器模式。
+mLRS 默认用 LDO 模式。
+
+查看 mLRS 是否支持: 在 `platformio.ini` 里已经有先例:
+```ini
+;-- BetaFPV SuperD (ESP32 双天线版) --
+[env:rx-betafpv-superd-2400]
+extends = env:rx-generic-2400-td-pa
+build_flags =
+  ${env_common_rx_esp32.build_flags}
+  -D RX_ELRS_BETAFPV_SUPERD_2400_ESP32
+  -D SX_USE_REGULATOR_MODE_DCDC        ; ← 这个!
+  -D SX2_USE_REGULATOR_MODE_DCDC
+```
+
+所以 BetaFPV Nano 也应该加 `-D SX_USE_REGULATOR_MODE_DCDC`。
+
+### PA 增益对比
+
+| 参数 | ELRS | mLRS |
+|------|------|------|
+| PA LNA gain | 12 dB | 18 dB (`POWER_GAIN_DBM`) |
+| SX max power | power_values 最大 = 1 dBm | `SX1280_POWER_3_DBM` (3 dBm) |
+| 理论最大输出 | 1 + 12 = 13 dBm (20 mW) | 3 + 18 = 21 dBm (126 mW) |
+
+注意: mLRS 的 PA 增益写的 18 dB 是 **Generic** 值, 实际 BetaFPV Nano 的 PA 增益
+可能是 12 dB (和 ELRS 一致)。需要确认硬件实际 PA 芯片型号。
+
+如果要保守/安全, 可以新建一个 HAL 把 `POWER_GAIN_DBM` 改为 12:
+```c
+#define POWER_GAIN_DBM            12  // BetaFPV Nano 实际 PA 增益
+```
+
+---
+
+## 4. 最终方案: 新增 BetaFPV Nano target (已实施!)
+
+### ✅ 已完成的修改 (3个文件)
+
+#### 4a. 新增 HAL 文件
+
+> `mLRS/Common/hal/esp/rx-hal-betafpv-nano-2400-esp8285.h`
+
+基于 `rx-hal-generic-2400-pa-esp8285.h` 复制, 修改点:
+- **`POWER_GAIN_DBM` 从 18 改为 12** (和 ELRS 的 `power_lna_gain: 12` 一致)
+- 功率表调整: 最大档从 100mW 降为 50mW
+  - 原因: 100mW 是数传回传用, 占用时间短发热少; RX as TX 时 17mW 是散热极限
+- 注释标注了 BetaFPV Nano 硬件信息和 DC-DC 模式
+
+```c
+// 关键改动:
+#define POWER_GAIN_DBM            12  // ← 从 18 改为 12!
+
+const rfpower_t rfpower_list[] = {
+    { .dbm = POWER_MIN, .mW = INT8_MIN },
+    { .dbm = POWER_10_DBM, .mW = 10 },     // 10 + 12 = 22 dBm → ~10mW 出天线
+    { .dbm = POWER_14_DBM, .mW = 25 },     // 14 + 12 = 26 dBm → ~25mW
+    { .dbm = POWER_17_DBM, .mW = 50 },     // 17 + 12 = 29 dBm → ~50mW (散热安全)
+};
+// 注: generic 原来有 POWER_20_DBM (100mW), 这里去掉了
+```
+
+#### 4b. 注册 HAL 到 esp-hal.h
+
+> `mLRS/Common/hal/esp/esp-hal.h`
+
+在 SpeedyBee 之后添加:
+```c
+#ifdef RX_ELRS_BETAFPV_NANO_2400_ESP8285
+#include "rx-hal-betafpv-nano-2400-esp8285.h"
+#endif
+```
+
+#### 4c. platformio.ini 新增 env
+
+> `platformio.ini` (项目根目录)
+
+在 `rx-speedybee-nano-2400` 之后添加:
+```ini
+[env:rx-betafpv-nano-2400]              ; like generic 2400 pa, but PA gain=12dB, SX uses DCDC mode
+extends = env_common_rx_esp82xx
+board = esp8285
+build_src_filter =
+  ${env_common_rx_esp82xx.build_src_filter}
+  +<modules/sx12xx-lib/src/sx128x.cpp>
+build_flags =
+  ${env_common_rx_esp82xx.build_flags}
+  -D RX_ELRS_BETAFPV_NANO_2400_ESP8285
+  -D SX_USE_REGULATOR_MODE_DCDC
+```
+
+---
+
+## 5. ESP32/ESP32C3 的情况 (如果 ESP8285 不够用)
+
+> 结论: ESP8285 完全够, 但这里列出 ESP32 方案备用
+
+mLRS 已有大量 ESP32 target:
+
+| MCU | 功能 | 现有 target 举例 |
+|-----|------|-----------------|
+| ESP32 | 双天线 TD 接收机 | `rx-generic-2400-td-pa` (pico32 board) |
+| ESP32 | 发射模块 TX | `tx-betafpv-micro-1w-2400` (esp32dev board) |
+| ESP32C3 | LR1121 接收机 | `rx-generic-c3-lr1121` |
+| ESP32S3 | FlySky PR02 | `rx-flysky-pr02-2400-td-esp32s3` |
+
+ESP32 target 的 CPU 跑 240 MHz, 直接改 HAL pin 就行, 和 ESP8285 一样的流程。
+但是硬件上 ESP32 模块更大, 不适合塞进 Nano 小板子。
+
+---
+
+## 6. 工作量评估
+
+| 任务 | 状态 | 文件 |
+|------|------|------|
+| git clone mLRS + run_setup.py | ✅ 已完成 | - |
+| 新增 HAL 头文件 (复制+改 PA gain) | ✅ 已完成 | `rx-hal-betafpv-nano-2400-esp8285.h` |
+| platformio.ini 加 env | ✅ 已完成 | `platformio.ini` |
+| esp-hal.h 加 #ifdef | ✅ 已完成 | `esp-hal.h` |
+| **编译验证** | ⬜ 待做 | PIO Build env:rx-betafpv-nano-2400 |
+| **刷机** | ⬜ 待做 | UART 接线 + 按住 boot 上电 + esptool |
+
+**总计改动: 3个文件, 约 15 行新增/修改代码。**

@@ -1,0 +1,64 @@
+# 因为可能有cpp, py, js 各种语言，---包裹内为一个程式的
+---
+
+# 基础风格基于 Google，它是出了名的紧凑
+BasedOnStyle: Google
+
+# 允许将简单的语句（比如 count=1; break;）放在同一行
+AllowShortBlocksOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+
+# 括号控制：不换行，紧贴在 if/else/switch 后面
+BreakBeforeBraces: Attach
+
+# 缩进 case 标签，让 switch 结构更清晰
+IndentCaseLabels: true
+
+# 强制 else 紧跟在 } 后面（不换行）
+AllowAllParametersOfDeclarationOnNextLine: false
+BinPackParameters: true
+
+# 最多允許連續出現幾個空行（为区分区块，我会手动多个空行）
+MaxEmptyLinesToKeep: 3
+# 保留代碼塊開頭處的空行
+KeepEmptyLinesAtTheStartOfBlocks: true
+
+# 注释对齐 true- 會自動對齊連續多行的行尾注釋。false-注釋會緊跟在代碼後面。leave-保持你手動擺放的位置
+AlignTrailingComments: true # ❗️算了，leave会导致全部排版失效
+ReflowComments: true # true——把长注释自动变成多行
+
+# 確保列寬足夠，防止自动换行。 设置为 0 不限制行宽
+ColumnLimit: 120  
+# 2. 禁止格式化引擎为了对齐而胡乱拆分参数
+# BinPackParameters: false # ❗️算了，会导致全部排版失效
+# ❗️❗️❗️ 失效原因可能是版本问题？clang-format很严格，一处出错，全部缩进失效
+
+
+# 如果縮進沒變 10 個空格：說明 VS Code 根本沒在用你的檔案
+# dentWidth: 10 # ❌️仅用于测试
+
+... 
+# 因为可能有cpp, py, js 各种语言，...包裹内为一个程式的
+
+
+
+# ✅️ case等若想保持一行，还是直接用
+# // clang-format on
+# // clang-format off
+# 去包裹吧
+
+# ✅️ 若想保持不同行，就加注释
+# xTaskCreatePinnedToCore(
+#     ledTask,               // 1. 任务函数指针
+#     "LED_Task",            // 2. 任务名称 (字符串)
+#     2048,                  // 3. 栈深度 (字节)
+#     ...
+# );
+
+
+# ⚠️
+# 必须要保存在生效
+# 用 # 注释，而不是 ;

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ESP32 透传配置 · Ultimate</title>
+    <style>
+        /* === 赛博风格 CSS (保持紧凑) === */
+        :root{--bg:#f4f7f6;--panel:#fff;--text:#2c3e50;--muted:#94a3b8;--accent:#e11d48;--ok:#10b981;--warn:#f59e0b;--line:#e2e8f0;--radius:12px;--shadow:0 8px 30px rgba(0,0,0,0.05)}
+        *{box-sizing:border-box;transition:all 0.2s ease}
+        body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--text);padding:20px}
+        .container{max-width:900px;margin:0 auto}
+        header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+        .card{background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin-bottom:20px;border:1px solid var(--line)}
+        .card-title{font-size:16px;font-weight:700;margin-bottom:15px;display:flex;align-items:center;gap:8px;border-left:4px solid var(--accent);padding-left:10px}
+        .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+        .row{margin-bottom:12px}
+        label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600}
+        input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:#f8fafc}
+        input:focus{outline:none;border-color:var(--accent);background:#fff}
+        /* 预设按钮样式 */
+        .preset-group{display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap}
+        .btn-sm{padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid var(--line);background:#fff}
+        .btn-sm:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+        .btn-main{width:100%;padding:15px;background:var(--text);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-top:20px}
+        .btn-main:hover{background:var(--accent);transform:translateY(-2px)}
+        .status-pill{padding:4px 12px;border-radius:50px;font-size:12px;background:#fff;border:1px solid var(--line)}
+        .hint{font-size:11px;color:var(--muted);font-weight:400}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div><h1 style="margin:0;font-size:20px">ESP32 透传配置</h1><span class="hint">Core: 1.0.6 | NVS Storage</span></div>
+        <div class="status-pill">STA IP: <b id="ipStatus" style="color:var(--accent)">0.0.0.0</b></div>
+    </header>
+
+    <div class="card">
+        <div class="card-title">一键预设 (Presets)</div>
+        <div class="preset-group">
+            <button class="btn-sm" onclick="applyPreset('TCP_FAST')">TCP 极速 (飞控)</button>
+            <button class="btn-sm" onclick="applyPreset('UDP_DFT')">UDP 默认 (广播)</button>
+            <button class="btn-sm" onclick="applyPreset('STABLE')">长距离稳定模式</button>
+            <button class="btn-sm" onclick="applyPreset('CLEAR_WIFI')" style="color:var(--accent)">清空 WiFi 信息</button>
+        </div>
+        <p class="hint">提示：预设仅修改下方表单，点击底部“保存”后才会写入 ESP32 重启生效。</p>
+    </div>
+
+    <form id="mainForm">
+        <div class="grid">
+            <div class="card">
+                <div class="card-title">网络与模式</div>
+                <div class="row">
+                    <label>当前模式</label>
+                    <select id="mode" name="mode">
+                        <option value="1">TCP Client</option>
+                        <option value="2">UDP (透传推荐)</option>
+                        <option value="3">Bluetooth SPP</option>
+                        <option value="4">BLE</option>
+                        <option value="5">ESP-NOW</option>
+                    </select>
+                </div>
+                <div class="row">
+                    <label>本地监听端口 / UDP 端口</label>
+                    <input type="number" id="listenPort" name="listenPort">
+                </div>
+                <div class="row">
+                    <label>目标发送端口 (PC端接收口)</label>
+                    <input type="number" id="sendPort" name="sendPort">
+                </div>
+                <div style="display:flex;gap:15px">
+                    <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+                        <input type="checkbox" id="sendBroad" name="sendBroad" value="1" style="width:auto"> 开启发送广播
+                    </label>
+                    <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+                        <input type="checkbox" id="listenBroad" name="listenBroad" value="1" style="width:auto"> 接收广播
+                    </label>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">STA 模式 (连接路由器)</div>
+                <div class="row">
+                    <label>家庭 WiFi SSID</label>
+                    <input type="text" id="wifiSSID" name="wifiSSID" placeholder="不填则不连接">
+                </div>
+                <div class="row">
+                    <label>WiFi 密码</label>
+                    <input type="text" id="wifiPassword" name="wifiPassword" placeholder="至少8位">
+                </div>
+                <div class="row">
+                    <label>WiFi 信道</label>
+                    <input type="number" id="wifiChannel" name="wifiChannel" min="1" max="13">
+                </div>
+                <div class="row" style="display:flex;align-items:center;gap:10px">
+                    <input type="checkbox" id="autoConnectWifi" name="autoConnectWifi" value="1" style="width:auto"> 
+                    <label style="margin:0">开机自动尝试连接</label>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">物理串口 (Hardware)</div>
+                <div class="row">
+                    <label>数据口选择</label>
+                    <select id="serialDataNum" name="serialDataNum">
+                        <option value="2">Serial 2 (IO16/17)</option>
+                        <option value="0">Serial 0 (USB/IO1/3)</option>
+                    </select>
+                </div>
+                <div class="row">
+                    <label>数据波特率</label>
+                    <input type="number" id="baudData" name="baudData">
+                </div>
+                <div class="row">
+                    <label>调试波特率 (固定Serial 0)</label>
+                    <input type="number" id="baudDebug" name="baudDebug">
+                </div>
+                <div class="row" style="display:flex;align-items:center;gap:10px">
+                    <input type="checkbox" id="debugON" name="debugON" value="1" style="width:auto"> 
+                    <label style="margin:0">开启串口调试输出</label>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Air Config (分包策略)</div>
+                <div class="row">
+                    <label>Min Size (Bytes) <span class="hint">满足才发</span></label>
+                    <input type="number" id="flushMinSize" name="flushMinSize">
+                </div>
+                <div class="row">
+                    <label>Thres Size (Bytes) <span class="hint">强行分包</span></label>
+                    <input type="number" id="flushThresSize" name="flushThresSize">
+                </div>
+                <div class="row">
+                    <label>Min Time (us)</label>
+                    <input type="number" id="flushMinTime" name="flushMinTime">
+                </div>
+                <div class="row">
+                    <label>Thres Time (us)</label>
+                    <input type="number" id="flushThresTime" name="flushThresTime">
+                </div>
+            </div>
+        </div>
+
+        <button type="button" class="btn-main" onclick="save()">保存配置并重启 ESP32</button>
+    </form>
+</div>
+
+<script>
+// 1. 预设配置表 (基于你的 data_config.cpp 默认值)
+const PRESETS = {
+    TCP_FAST: {
+        mode: 1, flushMinSize: 1, flushThresSize: 12, flushMinTime: 1500, flushThresTime: 2000, baudData: 115200
+    },
+    UDP_DFT: {
+        mode: 2, flushMinSize: 1, flushThresSize: 8, flushMinTime: 1000, flushThresTime: 1500, baudData: 115200, sendBroad: 1, listenBroad: 1
+    },
+    STABLE: {
+        mode: 2, flushMinSize: 64, flushThresSize: 128, flushMinTime: 10000, flushThresTime: 20000, baudData: 57600
+    },
+    CLEAR_WIFI: {
+        wifiSSID: "", wifiPassword: "", autoConnectWifi: 0
+    }
+};
+
+// 2. 应用预设函数
+function applyPreset(key) {
+    const data = PRESETS[key];
+    for (let id in data) {
+        const el = document.getElementById(id);
+        if (el) {
+            if (el.type === 'checkbox') el.checked = !!data[id];
+            else el.value = data[id];
+        }
+    }
+    console.log("已应用预设:", key);
+}
+
+// 3. 获取当前配置
+async function loadConfig() {
+    try {
+        const res = await fetch('/get-config');
+        const data = await res.json();
+        
+        for (let key in data) {
+            const el = document.getElementById(key);
+            if (el) {
+                if (el.type === 'checkbox') el.checked = data[key] === 1;
+                else el.value = data[key];
+            }
+        }
+        document.getElementById('ipStatus').innerText = data.staIP || "0.0.0.0";
+    } catch (err) {
+        console.warn("无法连接 ESP32，当前为离线预览模式");
+    }
+}
+
+// 4. 保存配置
+async function save() {
+    const form = document.getElementById('mainForm');
+    const formData = new FormData(form);
+    
+    // 处理 Checkbox 的特殊逻辑 (没勾选的话 FormData 不会包含它)
+    const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        if (!formData.has(cb.name)) {
+            formData.append(cb.name, "0");
+        }
+    });
+
+    try {
+        const res = await fetch('/save-config', { method: 'POST', body: formData });
+        if (res.ok) alert("✅ 配置已发送！ESP32 正在重启...");
+        else alert("❌ 保存失败");
+    } catch (err) {
+        alert("网络请求失败，请检查是否连上 ESP32 的 WiFi");
+    }
+}
+
+// 5. 初始化
+window.onload = () => {
+    loadConfig();
+    // 自动轮询 IP 状态
+    setInterval(async () => {
+        try {
+            const res = await fetch('/get-config');
+            const data = await res.json();
+            document.getElementById('ipStatus').innerText = data.staIP;
+        } catch(e){}
+    }, 4000);
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+
+{
+//     // 排除文件夹 ❗️直接导致移除项目
+//     // "files.exclude": {
+//     //     "**/笔记草稿": true,
+//     //     "**/笔记草稿/**": true
+//     // },
+
+//     // 关闭 C/C++ 语法检查（PIO 专用）❗️只能全部关闭
+//     "C_Cpp.errorSquiggles": "disabled",
+//     "C_Cpp.intelliSenseEngine": "disabled",
+
+    // 只排除笔记草稿文件夹的 C/C++ 检查 ❗️对PIO项目无效
+    // "C_Cpp.files.exclude": {
+    //     "**/笔记草稿/**": true  //
+    // },
+    
+    
+    // ========== 中文标点处理 ==========
+    "editor.unicodeHighlight.nonBasicASCII": false,
+    "editor.unicodeHighlight.invisibleCharacters": false,
+    "editor.unicodeHighlight.ambiguousCharacters": false,
+    
+    "editor.unicodeHighlight.allowedCharacters": {
+        "，": true, "。": true, "；": true, "：": true,
+        "“": true, "”": true, "？": true, "！": true,
+        "（": true, "）": true, "【": true, "】": true,
+        "——": true, "…": true, "·": true, "～": true
+    }
+
+
+//     // 将文件夹关联为纯文本
+//     "files.associations": {
+//         "笔记草稿/*": "plaintext",
+//         "笔记草稿/**/*": "plaintext",
+//         "**/笔记草稿/*.h": "plaintext",
+//         "**/笔记草稿/*.cpp": "plaintext"
+//     }
+
+
+}

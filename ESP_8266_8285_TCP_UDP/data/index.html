@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ESP8266 透传 · Web Config</title>
+    <style>
+        :root {
+            --bg: #f7f8fb;
+            --panel: #ffffff;
+            --text: #111318;
+            --muted: #6b7280;
+            --line: #e6e8ef;
+            --accent: #ff2d2d;
+            --accent2: #0f172a;
+            --warn: #ff8a00;
+            --ok: #10b981;
+            --shadow: 0 18px 50px rgba(0, 0, 0, .10);
+            --radius: 18px;
+            --cut: 14px;
+            --mono: monospace;
+            --sans: system-ui, -apple-system, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            font-family: var(--sans);
+            color: var(--text);
+            background: radial-gradient(900px 480px at 10% 0%, rgba(255, 45, 45, .10), transparent 55%),
+                radial-gradient(900px 480px at 90% 15%, rgba(15, 23, 42, .10), transparent 60%), var(--bg)
+        }
+
+        .wrap {
+            max-width: 780px;
+            margin: 28px auto;
+            padding: 0 16px 36px
+        }
+
+        .topbar {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 18px;
+            flex-wrap: wrap
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px
+        }
+
+        .mark {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent), #ff6b6b);
+            clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%);
+            box-shadow: 0 10px 22px rgba(255, 45, 45, .25)
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.1
+        }
+
+        .sub {
+            margin: 3px 0 0;
+            color: var(--muted);
+            font-size: 11.5px
+        }
+
+        .status {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .85);
+            border: 1px solid var(--line);
+            font-size: 12px;
+            color: var(--accent2)
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--ok);
+            box-shadow: 0 0 0 5px rgba(16, 185, 129, .12)
+        }
+
+        .card {
+            background: rgba(255, 255, 255, .92);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 14px
+        }
+
+        .card::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 5px;
+            background: linear-gradient(90deg, var(--accent), rgba(255, 45, 45, .15), rgba(15, 23, 42, .12))
+        }
+
+        .card-hd {
+            padding: 14px 16px 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between
+        }
+
+        .card-hd h2 {
+            margin: 0;
+            font-size: 14px;
+            color: var(--accent2)
+        }
+
+        .tag {
+            font-family: var(--mono);
+            font-size: 11px;
+            color: rgba(15, 23, 42, .75);
+            background: rgba(15, 23, 42, .06);
+            padding: 3px 8px;
+            border-radius: 999px
+        }
+
+        .card-bd {
+            padding: 0 16px 16px
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 130px 1fr;
+            gap: 8px;
+            align-items: center;
+            padding: 8px 0;
+            border-top: 1px dashed rgba(230, 232, 239, .85)
+        }
+
+        .row:first-child {
+            border-top: 0
+        }
+
+        label {
+            font-size: 12px;
+            color: rgba(17, 19, 24, .85)
+        }
+
+        .hint {
+            display: block;
+            color: var(--muted);
+            font-size: 11px;
+            margin-top: 2px
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(15, 23, 42, .14);
+            background: rgba(255, 255, 255, .96);
+            outline: none;
+            font-size: 13px;
+            transition: .15s
+        }
+
+        input:focus,
+        select:focus {
+            border-color: rgba(255, 45, 45, .55);
+            box-shadow: 0 0 0 4px rgba(255, 45, 45, .10)
+        }
+
+        .btns {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px
+        }
+
+        button {
+            border: 0;
+            cursor: pointer;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-weight: 700;
+            transition: .15s;
+            color: var(--text)
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #ff6b6b);
+            color: white;
+            box-shadow: 0 14px 30px rgba(255, 45, 45, .25)
+        }
+
+        .btn-ghost {
+            background: rgba(15, 23, 42, .06)
+        }
+
+        .banner {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 12px;
+            background: rgba(255, 45, 45, .08);
+            border: 1px solid rgba(255, 45, 45, .18);
+            display: none;
+            font-size: 13px
+        }
+
+        .banner.show {
+            display: block
+        }
+
+        .ip-display {
+            font-family: var(--mono);
+            color: var(--accent);
+            font-weight: bold
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <!-- ===== 顶栏 ===== -->
+        <div class="topbar">
+            <div class="brand">
+                <div class="mark"></div>
+                <div>
+                    <h1>ESP8266 透传 · <span id="versionText" style="color:var(--accent);">...</span></h1>
+                    <div class="sub">LittleFS HTML · TCP/UDP</div>
+                </div>
+            </div>
+            <div class="status">
+                <div class="pill"><span class="dot"></span>在线</div>
+                <div class="pill">模式: <b id="currentModeText">...</b></div>
+                <div class="pill">
+                    AP: 10.0.0.1 &nbsp;
+                    STA: <span id="staIpText" class="ip-display">...</span>
+                </div>
+            </div>
+        </div>
+
+        <form id="configForm">
+
+            <!-- ===== 核心参数 ===== -->
+            <div class="card">
+                <div class="card-hd">
+                    <h2>核心参数 <span class="tag">transport</span><span class="hint">此处速度其实主要是为了接收端（电脑/手机）优化<br>
+                            UDP模式下100us间隔发送都没事，但是接收端网卡太堵<br>
+                            或主要是上位机程序太慢，所以间隔得长点</span></h2>
+                    <span class="hint">非中断，轮询到此时可能大于此数值</span>
+                </div>
+                <div class="card-bd">
+                    <div class="row">
+                        <label>工作模式</label>
+                        <select id="mode" name="mode">
+                            <option value="1">TCP WiFi</option>
+                            <option value="2">UDP WiFi</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <label>最小发包间隔 (μs)</label>
+                        <input type="number" id="flushMinTime" name="flushMinTime" min="0" max="25000">
+                    </div>
+                    <div class="row">
+                        <label>发包阈值间隔 (μs)</label>
+                        <input type="number" id="flushThresTime" name="flushThresTime" min="0" max="50000">
+                    </div>
+                    <div class="row">
+                        <label>最小发包大小 (B)<span class="hint">建议 1</span></label>
+                        <input type="number" id="flushMinSize" name="flushMinSize" min="1" max="256">
+                    </div>
+                    <div class="row">
+                        <label>发包阈值大小 (B)</label>
+                        <input type="number" id="flushThresSize" name="flushThresSize" min="1" max="1024">
+                    </div>
+                    <div class="btns">
+                        <button class="btn-ghost" type="button" onclick="loadPresets()">恢复当前模式默认值</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== 端口映射 ===== -->
+            <div class="card">
+                <div class="card-hd">
+                    <h2>端口映射 <span class="tag">port</span><span class="hint">
+                            若双ESP互传，对方发送端就是自己接收端</span></h2>
+                </div>
+                <div class="card-bd">
+                    <div class="row">
+                        <label>发送端口<span class="hint">
+                                对电脑没啥用，ESP在收到包后会自动切换为源端口</span></label>
+                        <input type="number" id="sendPort" name="sendPort">
+                    </div>
+                    <div class="row">
+                        <label>监听端口<span class="hint">ESP监听此口。地面站输入此端口发起通讯</span></label>
+                        <input type="number" id="listenPort" name="listenPort">
+                    </div>
+                    <div class="row">
+                        <label>广播设置<span class="hint">UDP专用</span></label>
+                        <div>
+                            <label><input type="checkbox" id="sendBroad" name="sendBroad" value="1"> 发送广播</label>
+                            <br>
+                            <label><input type="checkbox" id="listenBroad" name="listenBroad" value="1">
+                                接收所有IP
+                            </label>
+                            <label style="color:#999;">
+                                <input type="checkbox" disabled checked>
+                                接收广播包（不可关闭）
+                                <span class="hint">ESP32 无法区分收到的包是广播还是单播，两者都会接收</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== WiFi 设置 ===== -->
+            <div class="card">
+                <div class="card-hd">
+                    <h2>WiFi 设置 <span class="tag">network</span><span class="hint">UDP模式下可以<br>连接其他ESP透传</span></h2>
+                </div>
+                <div class="card-bd">
+                    <div class="row">
+                        <label>家庭WiFi名<span class="hint">室内一起连 家庭WIFI<br>
+                                        <br>
+                                        室外+双ESP通讯时，连其他ESP热点名即<br>
+                                        UDP_IP_10.0.0.1，密8个1</span></label>
+                        <input type="text" id="wifiSSID" name="wifiSSID" maxlength="32" placeholder="WiFi SSID">
+                    </div>
+                    <div class="row">
+                        <label>密码<span class="hint">如果是其他ESP热点，密码就是8个1</span></label>
+                        <input type="text" id="wifiPassword" name="wifiPassword" maxlength="63" placeholder="WiFi密码">
+                    </div>
+                    <div class="row">
+                        <label>自动连STA<span class="hint">
+                                        由 WIFI路由器 中介，收发信号都比AP模式强得多！<br>
+                                        <br>
+                                        但是你得记住右上角STA IP，开启后，重启ESP再次进入网页调参就会显示</span></label>
+                        <select id="autoConnectWifi" name="autoConnectWifi">
+                            <option value="0">否</option>
+                            <option value="1">是</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <label>AP信道 <span class="hint">1-13，通常13最干净</span></label>
+                        <input type="number" id="wifiChannel" name="wifiChannel" min="1" max="13">
+                    </div>
+                    <div class="row">
+                        <label>自动信道<span class="hint">开机时扫描一会儿<br>选择最干净的</span></label>
+                        <select id="wifiChAuto" name="wifiChAuto">
+                            <option value="0">固定信道</option>
+                            <option value="1">自动扫描最优</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- 防火墙提示 -->
+                        <div style="
+                            margin: 0 16px 16px;
+                            padding: 12px 14px;
+                            border-radius: 12px;
+                            background: linear-gradient(135deg, rgba(255,160,50,.08), rgba(255,100,50,.06));
+                            border: 1px solid rgba(255,140,0,.22);
+                            font-size: 12px;
+                            line-height: 1.7;
+                            color: #78570a;
+                        ">
+                            🛡️ <b style="color:#b45309;">Windows 防火墙提醒</b><br>
+                            建议连接 ESP 热点后，打开桌面右下角 <b>WiFi图标</b> → 右键点名称打开 <b>属性</b>
+                            设置为
+                            「<span style="color:#059669; font-weight:bold;">🏠 专用网络</span>」<br>
+                            ⚠️ 若设为「<b style="color:#dc2626;">公用网络</b>」，
+                            电脑长时间不发包，仅ESP发包时，Windows防火墙会拦截ESP的UDP包。<br>
+                            <span style="color:#6b7280; font-size:11px;">💡 症状：ESP 发包 Wireshark 能抓到，但
+                                Python/地面站收不到。电脑先发一包后恢复正常。</span>
+                        </div>
+            </div>
+
+            <!-- ===== 串口设置 ===== -->
+            <div class="card">
+                <div class="card-hd">
+                    <h2>串口设置 <span class="tag">serial</span></h2>
+                </div>
+                <div class="card-bd">
+                    <div class="row">
+                        <label>数据串口<span class="hint">UART0 固定</span></label>
+                        <input type="text" value="Serial 0 (TX=GPIO1, RX=GPIO3)" disabled
+                            style="background:#eee;cursor:not-allowed;">
+                    </div>
+                    <div class="row">
+                        <label>调试串口<span class="hint">UART1 仅TX</span></label>
+                        <input type="text" value="Serial 1 (TX=GPIO2, 仅发送)" disabled
+                            style="background:#eee;cursor:not-allowed;">
+                    </div>
+                    <div class="row">
+                        <label>数据口波特率</label>
+                        <div style="display:flex;gap:8px;">
+                            <select id="baudDataSelect" onchange="syncBaud('baudData',this.value)" style="flex:1;">
+                                <option value="9600">9600</option>
+                                <option value="57600">57600</option>
+                                <option value="115200">115200</option>
+                                <option value="230400">230400</option>
+                                <option value="460800">460800</option>
+                                <option value="921600">921600</option>
+                                <option value="custom" selected>自定义</option>
+                            </select>
+                            <input type="number" id="baudData" name="baudData" value="115200" min="1200" max="2000000"
+                                style="flex:1;">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <label>调试口波特率</label>
+                        <div style="display:flex;gap:8px;">
+                            <select id="baudDebugSelect" onchange="syncBaud('baudDebug',this.value)" style="flex:1;">
+                                <option value="9600">9600</option>
+                                <option value="57600">57600</option>
+                                <option value="115200">115200</option>
+                                <option value="230400">230400</option>
+                                <option value="460800">460800</option>
+                                <option value="921600">921600</option>
+                                <option value="custom" selected>自定义</option>
+                            </select>
+                            <input type="number" id="baudDebug" name="baudDebug" value="115200" min="1200" max="2000000"
+                                style="flex:1;">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <label>调试输出<span class="hint">占用GPIO2 (LED不可用)，没事闲着别开😂</span></label>
+                        <select id="debugON" name="debugON">
+                            <option value="1">开启</option>
+                            <option value="0">关闭</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== 保存按钮 ===== -->
+            <div class="card">
+                <div class="card-bd" style="padding:16px;">
+                    <div class="btns" style="justify-content:center;">
+                        <button class="btn-primary" type="button" onclick="saveConfig()"
+                            style="width:200px;">保存配置</button>
+                    </div>
+                    <div id="msgBanner" class="banner"></div>
+                </div>
+            </div>
+        </form>
+
+        <div style="text-align:center;color:#999;margin-top:20px;font-size:11px;">
+            ESP8266/8285 Transparent Transmission<br>Ported from ESP32_5Modes
+        </div>
+    </div>
+
+    <script>
+        // 默认值表 (对应 data_cfg.h 中的 SET_DFT_CONFIGS)
+        const AIR_DEFAULTS = {
+            1: { min: 1, thres: 64, minT: 3000, thresT: 5000 },  // TCP
+            2: { min: 1, thres: 32, minT: 2000, thresT: 3500 }   // UDP
+        };
+        const modeNames = ["", "TCP", "UDP"];
+
+        // 填入后端数据到表单
+        function applyConfig(d) {
+            ['mode', 'flushMinTime', 'flushThresTime', 'flushMinSize', 'flushThresSize',
+                'sendPort', 'listenPort', 'wifiSSID', 'wifiPassword',
+                'autoConnectWifi', 'baudData', 'baudDebug', 'debugON',
+                'wifiChannel', 'wifiChAuto'
+            ].forEach(id => {
+                const el = document.getElementById(id);
+                if (el && d[id] !== undefined) el.value = d[id];
+            });
+            const sb = document.getElementById('sendBroad');
+            const lb = document.getElementById('listenBroad');
+            if (sb) sb.checked = (d.sendBroad == 1);
+            if (lb) lb.checked = (d.listenBroad == 1);
+
+            const mt = document.getElementById('currentModeText');
+            if (mt) mt.innerText = modeNames[d.mode] || "?";
+            const si = document.getElementById('staIpText');
+            if (si) si.innerText = (!d.staIP || d.staIP === "0.0.0.0") ? "未连接" : d.staIP;
+            const vt = document.getElementById('versionText');
+            if (vt && d.firmwareVersion) vt.innerText = d.firmwareVersion;
+        }
+
+        // 页面加载
+        window.onload = function () {
+            const banner = document.getElementById('msgBanner');
+            banner.innerText = "读取配置...";
+            banner.classList.add('show');
+
+            fetch('/get-config')
+                .then(r => r.json())
+                .then(d => { applyConfig(d); banner.classList.remove('show'); })
+                .catch(() => {
+                    banner.innerText = "⚠️ 无法连接设备";
+                    banner.style.background = "#fff3cd";
+                    banner.style.color = "#856404";
+                });
+
+            // 每3秒轮询STA IP和模式
+            setInterval(() => {
+                fetch('/get-config').then(r => r.json()).then(d => {
+                    const si = document.getElementById('staIpText');
+                    if (si) si.innerText = (!d.staIP || d.staIP === "0.0.0.0") ? "未连接" : d.staIP;
+                    const mt = document.getElementById('currentModeText');
+                    if (mt) mt.innerText = modeNames[d.mode] || "?";
+                }).catch(() => { });
+            }, 3000);
+        };
+
+        // 保存配置
+        function saveConfig() {
+            // 边界检查
+            const checks = [
+                { id: 'flushMinTime', min: 0, max: 25000, n: 'Min Time' },
+                { id: 'flushThresTime', min: 0, max: 50000, n: 'Thres Time' },
+                { id: 'flushMinSize', min: 1, max: 256, n: 'Min Size' },
+                { id: 'flushThresSize', min: 1, max: 1024, n: 'Thres Size' },
+                { id: 'baudData', min: 1200, max: 2000000, n: '数据波特率' },
+                { id: 'baudDebug', min: 1200, max: 2000000, n: '调试波特率' },
+                { id: 'sendPort', min: 1, max: 65535, n: '发送端口' },
+                { id: 'listenPort', min: 1, max: 65535, n: '监听端口' },
+                { id: 'wifiChannel', min: 1, max: 13, n: '信道' }
+            ];
+            for (const c of checks) {
+                const v = parseInt(document.getElementById(c.id).value);
+                if (isNaN(v) || v < c.min || v > c.max) {
+                    alert('⚠️ ' + c.n + ' 范围 ' + c.min + '~' + c.max);
+                    document.getElementById(c.id).focus();
+                    return;
+                }
+            }
+            const minT = parseInt(document.getElementById('flushMinTime').value);
+            const thresT = parseInt(document.getElementById('flushThresTime').value);
+            if (minT > thresT) { alert('⚠️ MinTime > ThresTime'); return; }
+            const minS = parseInt(document.getElementById('flushMinSize').value);
+            const thresS = parseInt(document.getElementById('flushThresSize').value);
+            if (minS > thresS) { alert('⚠️ MinSize > ThresSize'); return; }
+
+            const pwd = document.getElementById('wifiPassword').value;
+            if (pwd.length > 0 && (pwd.length < 8 || pwd.length > 63)) {
+                alert('⚠️ WiFi密码 8~63位，或留空');
+                return;
+            }
+
+            const fd = new FormData(document.getElementById('configForm'));
+            fd.set('sendBroad', document.getElementById('sendBroad').checked ? '1' : '0');
+            fd.set('listenBroad', document.getElementById('listenBroad').checked ? '1' : '0');
+
+            const btn = document.querySelector('.btn-primary');
+            btn.disabled = true;
+            btn.innerText = "保存中...";
+
+            fetch('/save-config', { method: 'POST', body: fd })
+                .then(res => {
+                    if (res.ok) {
+                        const b = document.getElementById('msgBanner');
+                        b.innerHTML = "✅ 保存成功！长按按钮0.5秒，退出Web调参，自动生效";
+                        b.className = "banner show";
+                        b.style.background = "rgba(16,185,129,.15)";
+                        b.style.color = "#10b981";
+                    } else {
+                        return res.text().then(t => { throw new Error(t); });
+                    }
+                    btn.disabled = false;
+                    btn.innerText = "保存配置";
+                })
+                .catch(err => {
+                    alert("❌ " + err.message);
+                    btn.disabled = false;
+                    btn.innerText = "保存配置";
+                });
+        }
+
+        // 波特率下拉联动
+        function syncBaud(inputId, value) {
+            const el = document.getElementById(inputId);
+            if (value === 'custom') el.focus();
+            else el.value = value;
+        }
+
+        // 恢复默认值
+        function loadPresets() {
+            const m = parseInt(document.getElementById('mode').value);
+            const d = AIR_DEFAULTS[m];
+            if (d) {
+                document.getElementById('flushMinTime').value = d.minT;
+                document.getElementById('flushThresTime').value = d.thresT;
+                document.getElementById('flushMinSize').value = d.min;
+                document.getElementById('flushThresSize').value = d.thres;
+                const btn = document.querySelector('button[onclick="loadPresets()"]');
+                btn.innerText = "✅ 已恢复";
+                setTimeout(() => btn.innerText = "恢复当前模式默认值", 1000);
+            }
+        }
+    </script>
+</body>
+
+</html>

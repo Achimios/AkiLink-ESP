@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ESP32 透传 · Web Config</title>
+    <style>
+        /* 保持你原本的样式，为了节省篇幅，我压缩了部分通用CSS，保留核心风格 */
+        :root{--bg:#f7f8fb;--panel:#ffffff;--text:#111318;--muted:#6b7280;--line:#e6e8ef;--accent:#ff2d2d;--accent2:#0f172a;--warn:#ff8a00;--ok:#10b981;--shadow:0 18px 50px rgba(0,0,0,.10);--radius:18px;--cut:14px;--mono:monospace;--sans:system-ui,-apple-system,sans-serif;}
+        *{box-sizing:border-box}body{margin:0;font-family:var(--sans);color:var(--text);background:radial-gradient(900px 480px at 10% 0%,rgba(255,45,45,.10),transparent 55%),radial-gradient(900px 480px at 90% 15%,rgba(15,23,42,.10),transparent 60%),var(--bg)}.wrap{max-width:980px;margin:28px auto;padding:0 16px 36px}.topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:18px}.brand{display:flex;align-items:center;gap:12px}.mark{width:54px;height:54px;background:linear-gradient(135deg,var(--accent),#ff6b6b);clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,0 100%);box-shadow:0 10px 22px rgba(255,45,45,.25)}h1{margin:0;font-size:20px;letter-spacing:.2px;line-height:1.1}.sub{margin:4px 0 0;color:var(--muted);font-size:12.5px}.status{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}.pill{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;background:rgba(255,255,255,.85);border:1px solid var(--line);font-size:12.5px;color:var(--accent2)}.pill.info{background:rgba(15,23,42,.05)}.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 5px rgba(16,185,129,.12)}.dot.warn{background:var(--warn);box-shadow:0 0 0 5px rgba(255,138,0,.14)}.grid{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}@media (max-width:860px){.grid{grid-template-columns:1fr}}.card{background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;position:relative;margin-bottom:14px}.card::before{content:"";position:absolute;left:0;top:0;width:100%;height:6px;background:linear-gradient(90deg,var(--accent),rgba(255,45,45,.15),rgba(15,23,42,.12))}.card-hd{padding:16px 16px 10px;display:flex;align-items:center;justify-content:space-between}.card-hd h2{margin:0;font-size:14px;color:var(--accent2)}.tag{font-family:var(--mono);font-size:11px;color:rgba(15,23,42,.75);background:rgba(15,23,42,.06);padding:3px 8px;border-radius:999px}.card-bd{padding:0 16px 16px}.row{display:grid;grid-template-columns:140px 1fr;gap:10px;align-items:center;padding:10px 0;border-top:1px dashed rgba(230,232,239,.85)}.row:first-child{border-top:0}label{font-size:12.5px;color:rgba(17,19,24,.85)}.hint{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}input,select{width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(15,23,42,.14);background:rgba(255,255,255,.96);outline:none;font-size:13px;transition:.15s}input:focus,select:focus{border-color:rgba(255,45,45,.55);box-shadow:0 0 0 4px rgba(255,45,45,.10)}.btns{display:flex;gap:10px;margin-top:12px}button{border:0;cursor:pointer;padding:10px 14px;border-radius:14px;font-weight:700;transition:.15s;color:var(--text)}.btn-primary{background:linear-gradient(135deg,var(--accent),#ff6b6b);color:white;box-shadow:0 14px 30px rgba(255,45,45,.25)}.btn-ghost{background:rgba(15,23,42,.06)}.banner{margin-top:12px;padding:12px;border-radius:14px;background:rgba(255,45,45,.08);border:1px solid rgba(255,45,45,.18);display:none}.banner.show{display:block}
+        
+        /* 你的新需求样式 */
+        .ip-display { font-family: var(--mono); color: var(--accent); font-weight: bold; }
+        .ota-box { margin-top: 20px; border-top: 2px solid var(--line); padding-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="topbar">
+            <div class="brand">
+                <div class="mark"></div>
+                <div>
+                    <h1>ESP32 透传 · Web Config</h1>
+                    <div class="sub">Mirror's Edge UI · LittleFS Ver.</div>
+                </div>
+            </div>
+            <div class="status">
+                <div class="pill"><span class="dot"></span>在线</div>
+                <div class="pill">模式: <b id="currentModeText">loading...</b></div>
+                <div class="pill info">
+                    AP: 10.0.0.1 <br/>
+                    STA: <span id="staIpText" class="ip-display">Checking...</span>
+                </div>
+            </div>
+        </div>
+        
+        <form id="configForm">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-hd">
+                        <h2>核心参数 <span class="tag">transport</span></h2>
+                    </div>
+                    <div class="card-bd">
+                        <div class="row">
+                            <label>工作模式</label>
+                            <select id="mode" name="mode">
+                                <option value="1">TCP Client</option>
+                                <option value="2">UDP</option>
+                                <option value="3">SPP (BT Classic)</option>
+                                <option value="4">BLE</option>
+                                <option value="5">ESP-NOW</option>
+                            </select>
+                        </div>
+                        
+                        <div class="row">
+                            <label>Flush Min Time (us)</label>
+                            <input type="number" id="flushMinTime" name="flushMinTime" min="0" max="25000">
+                        </div>
+                        <div class="row">
+                            <label>Flush Thres Time (us)</label>
+                            <input type="number" id="flushThresTime" name="flushThresTime" min="0" max="50000">
+                        </div>
+                        <div class="row">
+                            <label>Flush Min Size (B)</label>
+                            <input type="number" id="flushMinSize" name="flushMinSize" min="1" max="256">
+                        </div>
+                        <div class="row">
+                            <label>Flush Thres Size (B)</label>
+                            <input type="number" id="flushThresSize" name="flushThresSize" min="1" max="384">
+                        </div>
+                        
+                        <div class="btns">
+                            <button class="btn-ghost" type="button" onclick="loadPresets()">恢复当前模式默认值</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="card">
+                        <div class="card-hd"><h2>端口映射 <span class="tag">WifiIpPort</span></h2></div>
+                        <div class="card-bd">
+                            <div class="row">
+                                <label>发送目标端口<span class="hint">PC监听此口</span></label>
+                                <input type="number" id="sendPort" name="sendPort">
+                            </div>
+                            <div class="row">
+                                <label>本机监听端口<span class="hint">ESP监听此口</span></label>
+                                <input type="number" id="listenPort" name="listenPort">
+                            </div>
+                            <div class="row">
+                                <label>广播设置<span class="hint">UDP专用</span></label>
+                                <div style="display:flex; gap:10px;">
+                                    <label><input type="checkbox" id="sendBroad" name="sendBroad" value="1"> 发送广播</label>
+                                    <label><input type="checkbox" id="listenBroad" name="listenBroad" value="1"> 监听广播</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-hd"><h2>WiFi STA <span class="tag">network</span></h2></div>
+                        <div class="card-bd">
+                            <div class="row">
+                                <label>SSID</label>
+                                <input type="text" id="wifiSSID" name="wifiSSID" maxlength="32" placeholder="你家 WiFi 名称">
+                            </div>
+                            <div class="row">
+                                <label>Password</label>
+                                <input type="text" id="wifiPassword" name="wifiPassword" maxlength="63" placeholder="你家 WiFi 密码">
+                            </div>
+                            <div class="row">
+                                <label>自动连接</label>
+                                <select id="autoConnectWifi" name="autoConnectWifi">
+                                    <option value="0">否</option>
+                                    <option value="1">是</option>
+                                </select>
+                            </div>
+                            <div class="row">
+                                <label>WiFi 信道 <span class="hint">1-13</span></label>
+                                <input type="number" id="wifiChannel" name="wifiChannel" min="1" max="13" placeholder="默认13最干净">
+                            </div>
+                            <div class="row">
+                                <label>自动信道</label>
+                                <select id="wifiChAuto" name="wifiChAuto">
+                                    <option value="0">固定信道</option>
+                                    <option value="1">自动扫描最优</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-hd"><h2>串口设置 <span class="tag">serial</span></h2></div>
+                        <div class="card-bd">
+                            <div class="row">
+                                <label>数据串口 (Data)</label>
+                                <select id="serialDataNum" name="serialDataNum">
+                                    <option value="0">Serial 0 (通常是USB/下载口)</option>
+                                    <option value="2">Serial 2 (默认透传口)</option>
+                                </select>
+                            </div>
+                            <div class="row">
+                                <label>调试串口 (Debug)</label>
+                                <input type="text" value="Serial 0" disabled style="background:#eee; cursor:not-allowed;">
+                                <span class="hint">调试口固定为 0，用于系统日志打印。</span>
+                            </div>
+                            <div class="row">
+                                <label>数据口波特率</label>
+                                <input type="number" id="baudData" name="baudData">
+                            </div>
+                            <div class="row">
+                                <label>调试口波特率</label>
+                                <input type="number" id="baudDebug" name="baudDebug">
+                            </div>
+                            <div class="row">
+                                <label>调试信息</label>
+                                <select id="debugON" name="debugON">
+                                    <option value="1">开启</option>
+                                    <option value="0">关闭</option>
+                                </select>
+                            </div>
+                            <input type="hidden" id="baudDebug" name="baudDebug" value="115200">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card" style="margin-top:20px;">
+                <div class="card-bd" style="padding:20px;">
+                    <div class="btns" style="justify-content: center;">
+                        <button class="btn-primary" type="button" onclick="saveConfig()" style="width:200px;">保存配置并重启</button>
+                    </div>
+                    <div id="msgBanner" class="banner"></div>
+                </div>
+            </div>
+        </form>
+        
+        <div class="card ota-box">
+            <div class="card-hd"><h2>固件更新 (OTA)</h2></div>
+            <div class="card-bd">
+                <form method="POST" action="/update" enctype="multipart/form-data">
+                    <div class="row">
+                        <label>选择固件(.bin.gz)</label>
+                        <input type="file" name="update" accept=".bin,.gz">
+                    </div>
+                    <div class="btns">
+                        <button class="btn-ghost" type="submit" onclick="return confirm('确定要更新固件吗？设备将重启。')">上传并更新</button>
+                    </div>
+                </form>
+                <div class="hint" style="margin-top:10px;">
+                    提示：请使用文件名包含 "ESP_透传" 且后缀为 .bin.gz 的固件。
+                </div>
+            </div>
+        </div>
+        
+        <div style="text-align:center; color:#999; margin-top:30px; font-size:12px;">
+            Generated by Gemini 3 Pro · ESP32 Configurator
+        </div>
+    </div>
+    
+    <script>
+        // === C++ data_config.cpp 映射的默认值表 ===
+        // 格式: { minSize, thresSize, minTime, thresTime }
+        const AIR_DEFAULTS = {
+            1: { min: 1, thres: 12, minT: 1500, thresT: 2000 },  // TCP
+            2: { min: 1, thres: 8,  minT: 1000, thresT: 1500 },  // UDP
+            3: { min: 1, thres: 16, minT: 2000, thresT: 4000 },  // SPP
+            4: { min: 1, thres: 32, minT: 4000, thresT: 6000 },  // BLE
+            5: { min: 1, thres: 64, minT: 10000, thresT: 20000 } // ESP-NOW
+        };
+
+        const COMMON_DEFAULTS = {
+            sendPort: 5761,
+            listenPort: 5761,
+            baudData: 115200,
+            wifiChannel: 13,
+            sendBroad: true,  // wifiIpPort_dft 默认是 true
+            listenBroad: true // wifiIpPort_dft 默认是 true
+        };
+
+        // 页面加载时自动拉取数据
+        window.onload = function() {
+            const banner = document.getElementById('msgBanner');
+            banner.innerText = "正在读取配置...";
+            banner.classList.add('show');
+            
+            // 设置 1.5秒超时，如果 fetch 没反应（说明在电脑上），就加载假数据
+            const fetchWithTimeout = (url, ms, { signal, ...options } = {}) => {
+                const controller = new AbortController();
+                const promise = fetch(url, { signal: controller.signal, ...options });
+                if (signal) signal.addEventListener("abort", () => controller.abort());
+                const timeout = setTimeout(() => controller.abort(), ms);
+                return promise.finally(() => clearTimeout(timeout));
+            };
+            
+            fetchWithTimeout('/get-config', 1500)
+            .then(response => response.json())
+            .then(data => {
+                applyConfigToUI(data);
+                banner.classList.remove('show');
+            })
+            .catch(err => {
+                console.warn("无法连接设备，进入【电脑调试/Mock模式】");
+                banner.innerText = "⚠️ 调试模式：使用模拟数据";
+                banner.style.background = "#fff3cd";
+                banner.style.color = "#856404";
+                banner.style.borderColor = "#ffeeba";
+                
+                // === 假数据 (Mock) ===
+                const mockData = {
+                    mode: 1, 
+                    flushMinTime: 1000, flushThresTime: 2000, flushMinSize: 64, flushThresSize: 128,
+                    sendPort: 5761, listenPort: 5761, sendBroad: 1, listenBroad: 1,
+                    wifiSSID: "Test_WiFi_Mock", wifiPassword: "password123", autoConnectWifi: 1,
+                    wifiChannel: 6, wifiChAuto: 0,
+                    baudData: 115200, debugON: 1,
+                    staIP: "192.168.1.105 (Mock)"
+                };
+                applyConfigToUI(mockData);
+            });
+        };
+        
+        function applyConfigToUI(data) {
+            // 1. 填充常规字段
+            const fields = [
+            'mode', 'flushMinTime', 'flushThresTime', 'flushMinSize', 'flushThresSize',
+            'sendPort', 'listenPort', 'wifiSSID', 'wifiPassword', 
+            'autoConnectWifi', 'baudData', 'debugON', 'wifiChannel', 'wifiChAuto', 'baudDebug'
+            ];
+            
+            fields.forEach(id => {
+                const el = document.getElementById(id);
+                if(el && data[id] !== undefined) el.value = data[id];
+            });
+            
+            // 2. 处理 Checkbox
+            if(document.getElementById('sendBroad')) document.getElementById('sendBroad').checked = (data.sendBroad == 1);
+            if(document.getElementById('listenBroad')) document.getElementById('listenBroad').checked = (data.listenBroad == 1);
+            
+            // 3. 更新 UI 文本
+            const modes = ["", "TCP", "UDP", "SPP", "BLE", "ESP-NOW"];
+            if(document.getElementById('currentModeText')) 
+            document.getElementById('currentModeText').innerText = modes[data.mode] || "未知";
+            
+            if(document.getElementById('staIpText'))
+            document.getElementById('staIpText').innerText = (data.staIP === "0.0.0.0" || !data.staIP) ? "未连接" : data.staIP;
+        }
+        
+        function saveConfig() {
+            const form = document.getElementById('configForm');
+            const formData = new FormData(form);
+            
+            // 手动处理 checkbox，因为未选中的 checkbox 不会提交
+            formData.set('sendBroad', document.getElementById('sendBroad').checked ? '1' : '0');
+            formData.set('listenBroad', document.getElementById('listenBroad').checked ? '1' : '0');
+            
+            const btn = document.querySelector('.btn-primary');
+            btn.disabled = true;
+            btn.innerText = "保存中...";
+            
+            fetch('/save-config', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => {
+                if (res.ok) {
+                    document.getElementById('msgBanner').innerHTML = "✅ 保存成功！设备即将重启...";
+                    document.getElementById('msgBanner').className = "banner show";
+                    document.getElementById('msgBanner').style.background = "rgba(16,185,129,.1)";
+                    document.getElementById('msgBanner').style.borderColor = "rgba(16,185,129,.3)";
+                } else {
+                    throw new Error("Save failed");
+                }
+            })
+            .catch(err => {
+                alert("保存失败 (Mock模式下也是正常的)，请检查连接！");
+                btn.disabled = false;
+                btn.innerText = "保存配置并重启";
+            });
+        }
+        
+        // === 你的核心需求：载入默认值 ===
+        function loadPresets() {
+            // 1. 获取当前选择的模式
+            const modeSelect = document.getElementById('mode');
+            const modeVal = parseInt(modeSelect.value);
+            
+            // 2. 查找对应的 AirConfig 默认值
+            const def = AIR_DEFAULTS[modeVal];
+            
+            if (def) {
+                // 填入分包参数
+                document.getElementById('flushMinTime').value = def.minT;
+                document.getElementById('flushThresTime').value = def.thresT;
+                document.getElementById('flushMinSize').value = def.min;
+                document.getElementById('flushThresSize').value = def.thres;
+                
+                // 填入通用端口参数 (WifiIpPort defaults)
+                document.getElementById('sendPort').value = COMMON_DEFAULTS.sendPort;
+                document.getElementById('listenPort').value = COMMON_DEFAULTS.listenPort;
+                document.getElementById('sendBroad').checked = COMMON_DEFAULTS.sendBroad;
+                document.getElementById('listenBroad').checked = COMMON_DEFAULTS.listenBroad;
+                document.getElementById('wifiChannel').value = COMMON_DEFAULTS.wifiChannel;
+                
+                // 填入通用串口参数 (Serial defaults)
+                document.getElementById('baudData').value = COMMON_DEFAULTS.baudData;
+                
+                // 给个视觉反馈
+                const btn = document.querySelector('button[onclick="loadPresets()"]');
+                const oldText = btn.innerText;
+                btn.innerText = "✅ 已恢复默认";
+                setTimeout(() => btn.innerText = oldText, 1000);
+            } else {
+                alert("未找到该模式的默认定义！");
+            }
+        }
+    </script>
+</body>
+</html>

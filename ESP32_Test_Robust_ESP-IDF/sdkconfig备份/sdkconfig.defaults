@@ -1,0 +1,99 @@
+# ═══════════════════════════════════════════════════════════════
+#  sdkconfig.defaults — MAVLink 低速高可靠 menuconfig 预设值
+# ═══════════════════════════════════════════════════════════════
+#
+#  PlatformIO 在首次编译时会读取此文件，
+#  将其中的值作为 menuconfig 的默认值合并到 sdkconfig.esp32dev。
+#  后续你还可以通过 `pio run -t menuconfig` 交互式修改。
+#
+#  本文件基于我们讨论的"低速高可靠"策略定制，
+#  核心原则：浅队列 + 禁省电 + 11b + 中等缓冲
+# ═══════════════════════════════════════════════════════════════
+
+# ─────────── Flash 模式 ───────────
+# DIO 模式（你说 QIO 容易死机）
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+# ─────────── FreeRTOS ───────────
+# Tick 频率 1000Hz → vTaskDelay(1) = 1ms（而不是默认的 10ms）
+# 对 MAVLink 实时性很重要
+CONFIG_FREERTOS_HZ=1000
+
+# Main task 栈大小（默认 3584 可能不够用于带 Wi-Fi 的初始化）
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=4096
+
+# ─────────── Wi-Fi 驱动层 ───────────
+# ▸ 省电：必须关闭！
+CONFIG_ESP32_WIFI_SW_COEXIST_ENABLE=y
+
+# ▸ TX 缓冲区（驱动层发包队列）
+#   动态模式 = 按需分配，不会长期占用固定内存
+CONFIG_ESP32_WIFI_DYNAMIC_TX_BUFFER=y
+CONFIG_ESP32_WIFI_DYNAMIC_TX_BUFFER_NUM=16
+CONFIG_ESP32_WIFI_STATIC_TX_BUFFER_NUM=8
+
+# ▸ RX 缓冲区
+CONFIG_ESP32_WIFI_STATIC_RX_BUFFER_NUM=8
+CONFIG_ESP32_WIFI_DYNAMIC_RX_BUFFER_NUM=16
+
+# ▸ AMPDU：11b 不支持 AMPDU，关闭以节省内存
+CONFIG_ESP32_WIFI_AMPDU_TX_ENABLED=
+CONFIG_ESP32_WIFI_AMPDU_RX_ENABLED=
+
+# ▸ IRAM 优化：把 Wi-Fi 热点代码放入 IRAM，减少 Flash Cache Miss 抖动
+CONFIG_ESP_WIFI_IRAM_OPT=y
+CONFIG_ESP_WIFI_EXTRA_IRAM_OPT=y
+CONFIG_ESP_WIFI_RX_IRAM_OPT=y
+
+# ▸ NVS 存储 RF 校准数据（加速启动）
+CONFIG_ESP32_WIFI_NVS_ENABLED=y
+
+# ─────────── lwIP 核心 ───────────
+# ▸ IRAM 优化
+CONFIG_LWIP_IRAM_OPTIMIZATION=y
+
+# ▸ TCPIP 任务优先级（不要太高，防止压死业务任务）
+CONFIG_LWIP_TCPIP_TASK_PRIO=20
+
+# ▸ TCPIP 任务入口队列深度
+CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=32
+
+# ─────────── lwIP UDP ───────────
+# ▸ 最大同时活跃 UDP PCB 数（你只用 1~2 个，4 足够）
+CONFIG_LWIP_MAX_UDP_PCBS=4
+
+# ▸ UDP 接收邮箱（BSD socket 路径用，RAW 路径影响小）
+CONFIG_LWIP_UDP_RECVMBOX_SIZE=16
+
+# ─────────── lwIP TCP ───────────
+# 虽然你主要用 UDP，但保留合理的 TCP 参数以防后续需要
+
+# ▸ TCP 接收邮箱
+CONFIG_LWIP_TCP_RECVMBOX_SIZE=16
+
+# ▸ TCP Accept 邮箱（仅 TCP 服务器用）
+CONFIG_LWIP_TCP_ACCEPTMBOX_SIZE=6
+
+# ▸ TCP 发送缓冲区 & 接收窗口
+#   不用 65535 极值，中等值防止排队过深
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=16384
+CONFIG_LWIP_TCP_WND_DEFAULT=8192
+
+# ▸ TCP MSS（最大段长度）
+#   1200 = 鲁棒与效率的折中（Wi-Fi MTU 1500 → 不分片）
+CONFIG_LWIP_TCP_MSS=1200
+
+# ▸ TCP 定时器间隔
+#   250ms 保守，避免和 MAVLink 应用层重传叠加
+CONFIG_LWIP_TCP_TMR_INTERVAL=250
+
+# ▸ TCP 重传次数
+#   数据段 6 次（快速放弃旧数据，让应用层发新数据）
+CONFIG_LWIP_TCP_MAXRTX=6
+#   SYN 段 4 次（建连失败就快速报错）
+CONFIG_LWIP_TCP_SYNMAXRTX=4
+
+# ─────────── 看门狗 ───────────
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10

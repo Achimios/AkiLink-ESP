@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ESP32 透传 - Web Config (交互测试版)</title>
+  <style>
+    :root{
+      --bg:#f7f8fb;
+      --panel:#ffffff;
+      --text:#111318;
+      --muted:#6b7280;
+      --line:#e6e8ef;
+      --accent:#ff2d2d;      /* 镜之边缘：红 */
+      --accent2:#0f172a;     /* 深蓝黑 */
+      --warn:#ff8a00;        /* 橙色星号 */
+      --ok:#10b981;
+      --shadow: 0 18px 50px rgba(0,0,0,.10);
+      --radius:18px;
+      --cut: 14px;           /* 斜切角 */
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family:var(--sans);
+      color:var(--text);
+      background:
+        radial-gradient(900px 480px at 10% 0%, rgba(255,45,45,.10), transparent 55%),
+        radial-gradient(900px 480px at 90% 15%, rgba(15,23,42,.10), transparent 60%),
+        var(--bg);
+    }
+
+    .wrap{
+      max-width:980px;
+      margin:28px auto;
+      padding:0 16px 36px;
+    }
+
+    /* 顶栏 */
+    .topbar{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:18px;
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+    }
+    .mark{
+      width:54px; height:54px;
+      background: linear-gradient(135deg, var(--accent), #ff6b6b);
+      clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%);
+      box-shadow: 0 10px 22px rgba(255,45,45,.25);
+    }
+    h1{
+      margin:0;
+      font-size:20px;
+      letter-spacing:.2px;
+      line-height:1.1;
+    }
+    .sub{
+      margin:4px 0 0;
+      color:var(--muted);
+      font-size:12.5px;
+    }
+    .status{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      justify-content:flex-end;
+      align-items:flex-start;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 10px;
+      border-radius:999px;
+      background:rgba(255,255,255,.85);
+      border:1px solid var(--line);
+      box-shadow: 0 10px 25px rgba(0,0,0,.06);
+      font-size:12.5px;
+      color:var(--accent2);
+    }
+    .pill.info{
+      background:rgba(15,23,42,.05);
+      border-color:rgba(15,23,42,.12);
+    }
+    .dot{
+      width:8px; height:8px; border-radius:50%;
+      background:var(--ok);
+      box-shadow: 0 0 0 5px rgba(16,185,129,.12);
+    }
+    .dot.warn{ background:var(--warn); box-shadow: 0 0 0 5px rgba(255,138,0,.14); }
+
+    /* 主体布局 */
+    .grid{
+      display:grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap:14px;
+    }
+    @media (max-width:860px){
+      .grid{ grid-template-columns:1fr; }
+    }
+
+    .card{
+      background:rgba(255,255,255,.92);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      position:relative;
+    }
+    .card::before{
+      content:"";
+      position:absolute;
+      left:0; top:0;
+      width:100%;
+      height:6px;
+      background:linear-gradient(90deg, var(--accent), rgba(255,45,45,.15), rgba(15,23,42,.12));
+    }
+
+    .card-hd{
+      padding:16px 16px 10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .card-hd h2{
+      margin:0;
+      font-size:14px;
+      letter-spacing:.2px;
+      color:var(--accent2);
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .tag{
+      font-family:var(--mono);
+      font-size:11px;
+      color:rgba(15,23,42,.75);
+      background:rgba(15,23,42,.06);
+      padding:3px 8px;
+      border-radius:999px;
+      border:1px solid rgba(15,23,42,.10);
+    }
+    .card-bd{ padding:0 16px 16px; }
+
+    .section{
+      margin-bottom:20px;
+    }
+    .section:last-child{
+      margin-bottom:0;
+    }
+
+    .row{
+      display:grid;
+      grid-template-columns: 140px 1fr;
+      gap:10px;
+      align-items:center;
+      padding:10px 0;
+      border-top:1px dashed rgba(230,232,239,.85);
+    }
+    .row:first-child{ border-top:0; }
+
+    label{
+      font-size:12.5px;
+      color:rgba(17,19,24,.85);
+      position:relative;
+    }
+    .hint{
+      display:block;
+      color:var(--muted);
+      font-size:11.5px;
+      margin-top:2px;
+    }
+
+    .ctrl{
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    input, select{
+      width:100%;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid rgba(15,23,42,.14);
+      background:rgba(255,255,255,.96);
+      outline:none;
+      font-size:13px;
+      color:var(--accent2);
+      transition:.15s;
+    }
+    input:focus, select:focus{
+      border-color: rgba(255,45,45,.55);
+      box-shadow: 0 0 0 4px rgba(255,45,45,.10);
+    }
+    
+    /* 波特率特殊样式 */
+    .baud-combo{
+      display:flex;
+      gap:8px;
+    }
+    .baud-combo select{
+      width:160px;
+      flex-shrink:0;
+    }
+    .baud-combo input{
+      flex:1;
+    }
+
+    .rightmeta{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      justify-content:flex-end;
+      font-size:12px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    .preset{
+      font-family:var(--mono);
+      padding:2px 8px;
+      border-radius:999px;
+      background:rgba(107,114,128,.10);
+      border:1px solid rgba(107,114,128,.16);
+      color:rgba(107,114,128,.95);
+    }
+    .star{
+      color:var(--warn);
+      font-weight:800;
+      font-size:16px;
+      line-height:0;
+    }
+
+    .btns{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:12px;
+    }
+    button{
+      border:0;
+      cursor:pointer;
+      padding:10px 14px;
+      border-radius:14px;
+      font-weight:700;
+      letter-spacing:.2px;
+      transition:.15s;
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+    }
+    .btn-primary{
+      background:linear-gradient(135deg, var(--accent), #ff6b6b);
+      color:white;
+      box-shadow: 0 14px 30px rgba(255,45,45,.25);
+    }
+    .btn-primary:hover{ transform: translateY(-1px); }
+    .btn-ghost{
+      background:rgba(15,23,42,.06);
+      color:var(--accent2);
+      border:1px solid rgba(15,23,42,.12);
+    }
+    .btn-ghost:hover{ background:rgba(15,23,42,.09); }
+    .btn-small{
+      padding:6px 10px;
+      font-size:11.5px;
+      border-radius:10px;
+    }
+
+    .banner{
+      margin-top:12px;
+      padding:12px 14px;
+      border-radius:14px;
+      background:rgba(255,45,45,.08);
+      border:1px solid rgba(255,45,45,.18);
+      color:rgba(15,23,42,.90);
+      display:none;
+    }
+    .banner strong{ color:var(--accent); }
+    .banner.show{ display:block; }
+
+    .mini{
+      font-family:var(--mono);
+      font-size:12px;
+      padding:10px 12px;
+      border-radius:14px;
+      background:rgba(15,23,42,.05);
+      border:1px solid rgba(15,23,42,.10);
+      color:rgba(15,23,42,.88);
+      line-height:1.55;
+      white-space:pre-wrap;
+    }
+
+    .footer-note{
+      margin-top:14px;
+      color:var(--muted);
+      font-size:12px;
+      text-align:center;
+    }
+    
+    /* WiFi 提示 */
+    .wifi-hint{
+      margin-top:8px;
+      padding:10px 12px;
+      border-radius:12px;
+      background:rgba(255,138,0,.05);
+      border:1px solid rgba(255,138,0,.12);
+      color:rgba(15,23,42,.75);
+      font-size:11.5px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <div class="mark"></div>
+        <div>
+          <h1>ESP32 透传 · Web Config</h1>
+          <div class="sub">Mirror's Edge-ish UI · 白/红/黑 · 斜切块 · 10.0.0.1</div>
+        </div>
+      </div>
+
+      <div class="status">
+        <div class="pill"><span class="dot"></span>设备在线</div>
+        <div class="pill"><span class="dot warn"></span>Config 按钮已按下</div>
+        <div class="pill">MODE <b id="currentModeDisplay">BLE</b></div>
+        <div class="pill info">
+          缓存:512B<br/>
+          <span id="flushStatusDisplay">min(0us,1B) thres(2000us,16B)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- 左侧：核心参数 -->
+      <div class="card">
+        <div class="card-hd">
+          <h2>核心参数 <span class="tag">transport</span></h2>
+          <div class="rightmeta">
+            preset <span class="preset" id="modePresetDisplay">BLE: 0us/1B → 2000us/16B</span>
+            <span class="star">*</span>
+          </div>
+        </div>
+
+        <div class="card-bd">
+          <div class="section">
+            <div class="row">
+              <label>模式选择<span class="hint">1~5：TCP/UDP/SPP/BLE/ESP-NOW</span></label>
+              <div class="ctrl">
+                <select id="modeSelect">
+                  <option value="1">1 · TCP</option>
+                  <option value="2">2 · UDP</option>
+                  <option value="3">3 · SPP</option>
+                  <option value="4" selected>4 · BLE</option>
+                  <option value="5">5 · ESP-NOW</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row">
+              <label>flush_min_time_us<span class="hint">必须≥此时间才会flush（0-25000μs）</span></label>
+              <div class="ctrl">
+                <input type="number" id="flushMinTime" value="0" min="0" max="25000" />
+              </div>
+            </div>
+
+            <div class="row">
+              <label>flush_thres_time_us<span class="hint">到达就强制 flush（0-50000μs）</span></label>
+              <div class="ctrl">
+                <input type="number" id="flushThresTime" value="2000" min="0" max="50000" />
+              </div>
+            </div>
+
+            <div class="row">
+              <label>flush_min_size<span class="hint">必须≥此大小才会flush（1-256字节）</span></label>
+              <div class="ctrl">
+                <input type="number" id="flushMinSize" value="1" min="1" max="256" />
+              </div>
+            </div>
+
+            <div class="row">
+              <label>flush_thres_size<span class="hint">到达就强制 flush（1-384字节）</span></label>
+              <div class="ctrl">
+                <input type="number" id="flushThresSize" value="16" min="1" max="384" />
+              </div>
+            </div>
+
+            <div class="btns">
+              <button class="btn-ghost" type="button" onclick="loadDefaultAirConfig()">Default（应用 preset）</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 中间：操作按钮 -->
+      <div class="card">
+        <div class="card-hd">
+          <h2>操作 <span class="tag">actions</span></h2>
+        </div>
+        <div class="card-bd">
+          <div class="btns">
+            <button class="btn-ghost" type="button" onclick="showTestBanner()">Apply to Test（仅测试）</button>
+            <button class="btn-primary" type="button" onclick="showApplyBanner()">Apply / Save & Restart</button>
+          </div>
+
+          <div id="bannerApply" class="banner">
+            ✅ 保存成功。<br/>
+            <strong>松开按钮</strong> 以重启进入透传模式。
+          </div>
+
+          <div id="bannerTest" class="banner">
+            ✅ 测试配置已保存。<br/>
+            <strong>请松开配置按钮，重启并测试。若断电重启则退出测试...</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧：串口配置 -->
+      <div class="card">
+        <div class="card-hd">
+          <h2>串口配置 <span class="tag">system</span></h2>
+          <span class="tag">v0.1 UI mock</span>
+        </div>
+        <div class="card-bd">
+          <div class="section">
+            <div class="row">
+              <label>debug 输出<span class="hint">等价于 debugON 全局开关</span></label>
+              <div class="ctrl">
+                <select id="debugON">
+                  <option value="true">ON</option>
+                  <option value="false" selected>OFF</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row">
+              <label>Serial_data<span class="hint">透传数据口</span></label>
+              <div class="ctrl">
+                <select id="serialDataNum">
+                  <option value="0">UART0 (Serial)</option>
+                  <option value="1">UART1 (Serial1)</option>
+                  <option value="2">UART2 (Serial2)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row">
+              <label>baud_data<span class="hint">数据串口波特率</span></label>
+              <div class="ctrl">
+                <div class="baud-combo">
+                  <select id="baudDataSelect">
+                    <option value="9600">9600</option>
+                    <option value="19200">19200</option>
+                    <option value="38400">38400</option>
+                    <option value="57600">57600</option>
+                    <option value="115200" selected>115200</option>
+                    <option value="230400">230400</option>
+                    <option value="460800">460800</option>
+                    <option value="921600">921600</option>
+                    <option value="1000000">1000000</option>
+                    <option value="custom">自定义</option>
+                  </select>
+                  <input type="number" id="baudData" value="115200" min="1000" max="1000000" />
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <label>Serial_debug<span class="hint">日志输出口</span></label>
+              <div class="ctrl">
+                <select id="serialDebugNum">
+                  <option value="0" selected>UART0 (Serial)</option>
+                  <option value="1">UART1 (Serial1)</option>
+                  <option value="2">UART2 (Serial2)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row">
+              <label>baud_debug<span class="hint">日志串口波特率</span></label>
+              <div class="ctrl">
+                <div class="baud-combo">
+                  <select id="baudDebugSelect">
+                    <option value="9600">9600</option>
+                    <option value="19200">19200</option>
+                    <option value="38400">38400</option>
+                    <option value="57600">57600</option>
+                    <option value="115200" selected>115200</option>
+                    <option value="230400">230400</option>
+                    <option value="460800">460800</option>
+                    <option value="921600">921600</option>
+                    <option value="1000000">1000000</option>
+                    <option value="custom">自定义</option>
+                  </select>
+                  <input type="number" id="baudDebug" value="115200" min="1000" max="1000000" />
+                </div>
+              </div>
+            </div>
+
+            <div class="btns">
+              <button class="btn-ghost btn-small" type="button" onclick="loadDefaultSerialConfig()">Default（应用默认串口配置）</button>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="row">
+              <label>自动连接这个WIFI<span class="hint">SSID（最大32字节）</span></label>
+              <div class="ctrl">
+                <input type="text" id="wifiSSID" placeholder="例如：HomeWiFi" maxlength="32" />
+              </div>
+            </div>
+
+            <div class="row">
+              <label>你家WIFI密码<span class="hint">密码（8-63字符，ASCII）</span></label>
+              <div class="ctrl">
+                <input type="password" id="wifiPassword" placeholder="••••••••" maxlength="63" />
+              </div>
+            </div>
+
+            <div class="row">
+              <label>自动连接<span class="hint">是否尝试自动连接</span></label>
+              <div class="ctrl">
+                <select id="autoConnectWifi">
+                  <option value="true">是</option>
+                  <option value="false" selected>否</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="wifi-hint">
+              💡 提示：若 STA 连接失败将自动回退 AP（10.0.0.1）
+            </div>
+
+            <div class="btns">
+              <button class="btn-ghost btn-small" type="button" onclick="clearWifiConfig()">Clear（清空 WiFi 配置）</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 默认配置数据
+    const defaultConfigs = {
+      mode: "4", // BLE
+      airConfigs: {
+        "1": { minTime: 0, thresTime: 2000, minSize: 1, thresSize: 12 },     // TCP
+        "2": { minTime: 0, thresTime: 2000, minSize: 1, thresSize: 8 },      // UDP
+        "3": { minTime: 0, thresTime: 2000, minSize: 1, thresSize: 18 },     // SPP
+        "4": { minTime: 0, thresTime: 2000, minSize: 1, thresSize: 16 },     // BLE
+        "5": { minTime: 5000, thresTime: 10000, minSize: 1, thresSize: 64 }  // ESP-NOW
+      },
+      serialConfig: {
+        debugON: false,
+        serialDataNum: 0,
+        baudData: 115200,
+        serialDebugNum: 0,
+        baudDebug: 115200
+      },
+      modePresets: {
+        "1": "TCP: 0us/1B → 2000us/12B",
+        "2": "UDP: 0us/1B → 2000us/8B",
+        "3": "SPP: 0us/1B → 2000us/18B",
+        "4": "BLE: 0us/1B → 2000us/16B",
+        "5": "ESP-NOW: 5000us/1B → 10000us/64B"
+      }
+    };
+
+    // 当前配置状态
+    let currentConfig = {
+      mode: defaultConfigs.mode,
+      airConfig: { ...defaultConfigs.airConfigs[defaultConfigs.mode] },
+      serialConfig: { ...defaultConfigs.serialConfig },
+      wifiConfig: { ssid: "", password: "", autoConnect: false }
+    };
+
+    // DOM 元素引用
+    const modeSelect = document.getElementById('modeSelect');
+    const flushMinTime = document.getElementById('flushMinTime');
+    const flushThresTime = document.getElementById('flushThresTime');
+    const flushMinSize = document.getElementById('flushMinSize');
+    const flushThresSize = document.getElementById('flushThresSize');
+    const debugON = document.getElementById('debugON');
+    const serialDataNum = document.getElementById('serialDataNum');
+    const baudData = document.getElementById('baudData');
+    const baudDataSelect = document.getElementById('baudDataSelect');
+    const serialDebugNum = document.getElementById('serialDebugNum');
+    const baudDebug = document.getElementById('baudDebug');
+    const baudDebugSelect = document.getElementById('baudDebugSelect');
+    const wifiSSID = document.getElementById('wifiSSID');
+    const wifiPassword = document.getElementById('wifiPassword');
+    const autoConnectWifi = document.getElementById('autoConnectWifi');
+    const modePresetDisplay = document.getElementById('modePresetDisplay');
+    const currentModeDisplay = document.getElementById('currentModeDisplay');
+    const flushStatusDisplay = document.getElementById('flushStatusDisplay');
+    const bannerApply = document.getElementById('bannerApply');
+    const bannerTest = document.getElementById('bannerTest');
+
+    // 边界检查函数
+    function clampValue(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
+    // 实时边界检查（输入时）
+    function setupBoundaryChecks() {
+      // flush 参数边界检查
+      const boundaryConfigs = [
+        { element: flushMinTime, min: 0, max: 25000 },
+        { element: flushThresTime, min: 0, max: 50000 },
+        { element: flushMinSize, min: 1, max: 256 },
+        { element: flushThresSize, min: 1, max: 384 },
+        { element: baudData, min: 1000, max: 1000000 },
+        { element: baudDebug, min: 1000, max: 1000000 }
+      ];
+
+      boundaryConfigs.forEach(config => {
+        config.element.addEventListener('blur', function() {
+          const value = parseInt(this.value) || config.min;
+          const clamped = clampValue(value, config.min, config.max);
+          if (value !== clamped) {
+            this.value = clamped;
+            updateConfigFromInputs();
+          }
+        });
+        
+        // 也可以添加input事件实现实时检查
+        config.element.addEventListener('input', function() {
+          const value = parseInt(this.value);
+          if (!isNaN(value) && (value < config.min || value > config.max)) {
+            this.style.borderColor = 'var(--warn)';
+          } else {
+            this.style.borderColor = '';
+          }
+        });
+      });
+    }
+
+    // 波特率选择器逻辑
+    function setupBaudSelectors() {
+      function syncBaudSelect(select, input) {
+        select.addEventListener('change', function() {
+          if (this.value === 'custom') {
+            input.disabled = false;
+            input.focus();
+          } else {
+            input.disabled = true;
+            input.value = this.value;
+            updateConfigFromInputs();
+          }
+        });
+        
+        input.addEventListener('input', function() {
+          if (!this.disabled) {
+            updateConfigFromInputs();
+          }
+        });
+      }
+      
+      syncBaudSelect(baudDataSelect, baudData);
+      syncBaudSelect(baudDebugSelect, baudDebug);
+      
+      // 初始化
+      baudData.disabled = true;
+      baudDebug.disabled = true;
+    }
+
+    // 初始化页面
+    function initPage() {
+      // 绑定事件
+      modeSelect.addEventListener('change', onModeChange);
+      setupBoundaryChecks();
+      setupBaudSelectors();
+      
+      // 监听所有输入变化
+      const allInputs = document.querySelectorAll('input, select');
+      allInputs.forEach(input => {
+        input.addEventListener('change', updateConfigFromInputs);
+      });
+      
+      // 设置当前模式
+      modeSelect.value = currentConfig.mode;
+      
+      // 更新显示
+      updateAirConfigDisplay();
+      updateSerialConfigDisplay();
+      updateWifiConfigDisplay();
+      updateStatusDisplay();
+      updateModePresetDisplay();
+      
+      // 隐藏所有banner
+      hideAllBanners();
+    }
+
+    // 模式切换事件
+    function onModeChange() {
+      const newMode = modeSelect.value;
+      currentConfig.mode = newMode;
+      
+      // 更新当前模式显示
+      const modeNames = {
+        "1": "TCP", "2": "UDP", "3": "SPP", 
+        "4": "BLE", "5": "ESP-NOW"
+      };
+      currentModeDisplay.textContent = modeNames[newMode];
+      
+      // 更新预设显示
+      updateModePresetDisplay();
+      
+      // 更新状态显示
+      updateStatusDisplay();
+    }
+
+    // 从输入框更新配置
+    function updateConfigFromInputs() {
+      // 收集Air配置（带边界检查）
+      currentConfig.airConfig = {
+        minTime: clampValue(parseInt(flushMinTime.value) || 0, 0, 25000),
+        thresTime: clampValue(parseInt(flushThresTime.value) || 2000, 0, 50000),
+        minSize: clampValue(parseInt(flushMinSize.value) || 1, 1, 256),
+        thresSize: clampValue(parseInt(flushThresSize.value) || 16, 1, 384)
+      };
+      
+      // 收集串口配置
+      currentConfig.serialConfig = {
+        debugON: debugON.value === "true",
+        serialDataNum: parseInt(serialDataNum.value) || 0,
+        baudData: clampValue(parseInt(baudData.value) || 115200, 1000, 1000000),
+        serialDebugNum: parseInt(serialDebugNum.value) || 0,
+        baudDebug: clampValue(parseInt(baudDebug.value) || 115200, 1000, 1000000)
+      };
+      
+      // 收集WiFi配置
+      currentConfig.wifiConfig = {
+        ssid: wifiSSID.value.trim(),
+        password: wifiPassword.value,
+        autoConnect: autoConnectWifi.value === "true"
+      };
+      
+      // 更新当前模式
+      currentConfig.mode = modeSelect.value;
+      
+      // 更新状态显示
+      updateStatusDisplay();
+    }
+
+    // 加载默认的Air配置
+    function loadDefaultAirConfig() {
+      const mode = modeSelect.value;
+      const config = defaultConfigs.airConfigs[mode];
+      
+      // 更新输入框
+      flushMinTime.value = config.minTime;
+      flushThresTime.value = config.thresTime;
+      flushMinSize.value = config.minSize;
+      flushThresSize.value = config.thresSize;
+      
+      // 更新当前配置
+      currentConfig.airConfig = { ...config };
+      
+      // 更新状态显示
+      updateStatusDisplay();
+      
+      alert(`已应用 ${defaultConfigs.modePresets[mode]} 预设`);
+    }
+
+    // 加载默认的串口配置
+    function loadDefaultSerialConfig() {
+      const config = defaultConfigs.serialConfig;
+      
+      // 更新输入框
+      debugON.value = config.debugON ? "true" : "false";
+      serialDataNum.value = config.serialDataNum;
+      baudDataSelect.value = config.baudData.toString();
+      baudData.value = config.baudData;
+      baudData.disabled = true;
+      serialDebugNum.value = config.serialDebugNum;
+      baudDebugSelect.value = config.baudDebug.toString();
+      baudDebug.value = config.baudDebug;
+      baudDebug.disabled = true;
+      
+      // 更新当前配置
+      currentConfig.serialConfig = { ...config };
+      
+      // 更新状态显示
+      updateStatusDisplay();
+      
+      alert("已应用默认串口配置");
+    }
+
+    // 清空WiFi配置
+    function clearWifiConfig() {
+      wifiSSID.value = "";
+      wifiPassword.value = "";
+      autoConnectWifi.value = "false";
+      
+      // 更新当前配置
+      currentConfig.wifiConfig = { ssid: "", password: "", autoConnect: false };
+      
+      // 更新状态显示
+      updateStatusDisplay();
+      
+      alert("已清空WiFi配置");
+    }
+
+    // 更新Air配置显示
+    function updateAirConfigDisplay() {
+      const config = currentConfig.airConfig;
+      flushMinTime.value = config.minTime;
+      flushThresTime.value = config.thresTime;
+      flushMinSize.value = config.minSize;
+      flushThresSize.value = config.thresSize;
+    }
+
+    // 更新串口配置显示
+    function updateSerialConfigDisplay() {
+      const config = currentConfig.serialConfig;
+      debugON.value = config.debugON ? "true" : "false";
+      serialDataNum.value = config.serialDataNum;
+      // 波特率选择器需要特殊处理
+      if (config.baudData === 115200) {
+        baudDataSelect.value = "115200";
+        baudData.disabled = true;
+      } else {
+        baudDataSelect.value = "custom";
+        baudData.disabled = false;
+      }
+      baudData.value = config.baudData;
+      
+      serialDebugNum.value = config.serialDebugNum;
+      if (config.baudDebug === 115200) {
+        baudDebugSelect.value = "115200";
+        baudDebug.disabled = true;
+      } else {
+        baudDebugSelect.value = "custom";
+        baudDebug.disabled = false;
+      }
+      baudDebug.value = config.baudDebug;
+    }
+
+    // 更新WiFi配置显示
+    function updateWifiConfigDisplay() {
+      const config = currentConfig.wifiConfig;
+      wifiSSID.value = config.ssid;
+      wifiPassword.value = config.password;
+      autoConnectWifi.value = config.autoConnect ? "true" : "false";
+    }
+
+    // 更新模式预设显示
+    function updateModePresetDisplay() {
+      const mode = modeSelect.value;
+      modePresetDisplay.textContent = defaultConfigs.modePresets[mode];
+    }
+
+    // 更新状态显示
+    function updateStatusDisplay() {
+      const config = currentConfig.airConfig;
+      flushStatusDisplay.textContent = `min(${config.minTime}us,${config.minSize}B) thres(${config.thresTime}us,${config.thresSize}B)`;
+    }
+
+    // 显示Apply banner
+    function showApplyBanner() {
+      hideAllBanners();
+      
+      // 收集当前配置（模拟保存到ESP32）
+      updateConfigFromInputs();
+      
+      bannerApply.classList.add('show');
+      console.log("Apply/Save & Restart 点击 - 模拟保存配置并准备重启");
+      console.log("当前配置:", currentConfig);
+    }
+
+    // 显示Test banner
+    function showTestBanner() {
+      hideAllBanners();
+      
+      // 收集当前配置
+      updateConfigFromInputs();
+      
+      bannerTest.classList.add('show');
+      console.log("Apply to Test 点击 - 模拟写入RTC magic并准备测试重启");
+      console.log("测试配置:", currentConfig);
+    }
+
+    // 隐藏所有banner
+    function hideAllBanners() {
+      bannerApply.classList.remove('show');
+      bannerTest.classList.remove('show');
+    }
+
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', initPage);
+  </script>
+</body>
+</html>
